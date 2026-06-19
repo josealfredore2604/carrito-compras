@@ -37,7 +37,6 @@ normal en responder.
 
 import time
 
-import pytest
 from fastapi.testclient import TestClient
 
 from src.carrito.api import app
@@ -87,7 +86,7 @@ class TestRafagaDeSolicitudes:
         tiempo_promedio = sum(tiempos) / len(tiempos)
         tiempo_p95 = sorted(tiempos)[int(len(tiempos) * 0.95)]
 
-        print(f"\n📊 Estadisticas de 200 requests:")
+        print("\n📊 Estadisticas de 200 requests:")
         print(f"   Tiempo total: {tiempo_total:.2f}s")
         print(f"   Promedio por request: {tiempo_promedio * 1000:.1f}ms")
         print(f"   P95: {tiempo_p95 * 1000:.1f}ms")

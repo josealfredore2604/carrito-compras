@@ -34,7 +34,6 @@ El CORSMiddleware agrega dos funcionalidades:
 2. En requests regulares, agrega las cabeceras solo para origenes permitidos
 """
 
-import pytest
 from fastapi.testclient import TestClient
 
 from src.carrito.api import app

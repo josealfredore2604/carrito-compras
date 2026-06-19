@@ -54,7 +54,6 @@ PARA PROYECTOS NUEVOS: usa Playwright.
 """
 
 import os
-import time
 
 import pytest
 from selenium import webdriver
@@ -63,7 +62,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait, Select
+from selenium.webdriver.support.ui import Select, WebDriverWait
 
 # URL del frontend: configurable por variable de entorno para CI/CD
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:4200")
