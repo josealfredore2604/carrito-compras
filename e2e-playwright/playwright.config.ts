@@ -34,6 +34,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  // Snapshots portables entre Windows/Linux/Mac: omitir el OS del nombre del archivo.
+  // Por defecto Playwright genera carrito-vacio-chromium-win32.png (solo valido en Windows).
+  // Con esta plantilla genera carrito-vacio-chromium.png, usable en CI Linux y en local.
+  snapshotPathTemplate: '{testDir}/{testFilePath}-snapshots/{arg}-{projectName}{ext}',
   fullyParallel: true,
   forbidOnly: !!process.env['CI'],
   // En CI reintenta una vez: reduce falsos negativos por flakiness de red/browser
