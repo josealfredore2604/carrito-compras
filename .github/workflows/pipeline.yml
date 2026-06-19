@@ -1,17 +1,16 @@
 # Pipeline CI/CD para el proyecto carrito-compras (TiendaUV).
 #
-# Orden de ejecucion:
+# Grafo de dependencias de jobs:
 #
 #   tests-rapidos
-#        |
-#        v
-#   tests-integracion
-#        |
-#        v
-#   tests-sistema
-#        |
-#        v
-#   tests-rendimiento  (solo push a main)
+#        ├── tests-integracion
+#        │        └── tests-sistema
+#        │                 ├── tests-rendimiento    (solo push a main)
+#        │                 ├── tests-e2e-playwright (needs: build-frontend, tests-sistema)
+#        │                 ├── tests-e2e-cypress    (needs: build-frontend, tests-sistema)
+#        │                 └── security-zap-scan   (solo push a main)
+#        └── tests-seguridad-ampliada               (en paralelo con tests-integracion)
+#   build-frontend (needs: tests-rapidos)
 
 name: Pipeline CI/CD TiendaUV
 
@@ -24,15 +23,12 @@ on:
 
 env:
   PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
   MIN_COVERAGE: "80"
 
 # =============================================================================
-# JOB 1: Tests rapidos
-#
-# Corre sin Docker. La API usa sqlite:///:memory: con StaticPool como fallback
-# automatico cuando DATABASE_URL no esta seteada. Incluye lint, tests unitarios,
-# BDD, funcionales, tabla de decision y seguridad. Es la compuerta principal:
-# si falla aqui no se ejecutan los jobs posteriores.
+# JOB 1: Tests rapidos (SIN Docker)
+# Compuerta principal: si falla aqui no se ejecutan los jobs posteriores.
 # =============================================================================
 jobs:
   tests-rapidos:
@@ -61,7 +57,7 @@ jobs:
             tests/features/ \
             tests/test_funcional.py \
             tests/test_tabla_decision.py \
-            tests/security/ \
+            tests/security/test_seguridad_api.py \
             --cov=src \
             --cov-report=xml:reports/coverage.xml \
             --cov-report=html:reports/htmlcov \
@@ -79,12 +75,111 @@ jobs:
           retention-days: 7
 
 # =============================================================================
-# JOB 2: Tests de integracion
+# JOB 2: Build del frontend Angular
 #
-# TestContainers levanta un contenedor PostgreSQL real dentro del runner de
-# GitHub Actions. No requiere docker-compose ni configuracion externa.
-# El driver de Docker esta disponible por defecto en ubuntu-latest.
-# Los fixtures de conftest.py usan el patron rollback para aislar cada test.
+# Corre en paralelo con tests-integracion y tests-seguridad-ampliada.
+# Sube el bundle compilado como artifact para que los jobs de E2E lo usen
+# sin tener que reconstruirlo (ahorra 2-3 minutos por job).
+# =============================================================================
+  build-frontend:
+    name: Build Frontend Angular
+    runs-on: ubuntu-latest
+    needs: tests-rapidos
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          # cache: npm cachea node_modules entre ejecuciones del mismo job
+          # basandose en el hash de package-lock.json. Si package-lock.json
+          # no cambio, la capa de npm ci se restaura del cache (~30s vs 2min).
+          cache: "npm"
+          cache-dependency-path: "frontend/package-lock.json"
+
+      - name: Instalar dependencias del frontend
+        run: cd frontend && npm ci
+
+      - name: Build de produccion
+        run: cd frontend && npm run build -- --configuration=production
+
+      - name: Subir artifact del build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          # El build de Angular 17 genera archivos en dist/*/browser/
+          path: frontend/dist/
+          retention-days: 1
+
+# =============================================================================
+# JOB 3: Tests de seguridad ampliados
+#
+# Corre en PARALELO con tests-integracion (ambos dependen solo de tests-rapidos).
+# Esto reduce el tiempo total del pipeline: los tests de seguridad y los de
+# integracion se ejecutan al mismo tiempo en runners distintos.
+# =============================================================================
+  tests-seguridad-ampliada:
+    name: Tests de Seguridad Ampliados (OWASP)
+    runs-on: ubuntu-latest
+    needs: tests-rapidos
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - run: uv sync --dev
+
+      - name: Crear directorio de reportes
+        run: mkdir -p reports
+
+      - name: Ejecutar tests de seguridad ampliados
+        run: |
+          uv run pytest tests/security/ \
+            -v --tb=short \
+            --junit-xml=reports/security_test_results.xml
+
+      # pip-audit busca CVEs conocidos en las dependencias Python del proyecto.
+      # continue-on-error: true porque las vulnerabilidades pueden ser en
+      # dependencias transitivas sin fix disponible. El reporte queda como
+      # artefacto para revision manual; no bloquea el pipeline.
+      - name: Auditoria de dependencias con pip-audit
+        continue-on-error: true
+        run: |
+          uv run pip-audit \
+            --format json \
+            --output reports/pip_audit_report.json \
+            --desc on \
+            || echo "pip-audit encontro vulnerabilidades (ver reporte)"
+          uv run pip-audit --format markdown || true
+
+      # bandit analiza el codigo fuente Python en busca de patrones inseguros:
+      # uso de subprocess con shell=True, credenciales hardcodeadas, etc.
+      # continue-on-error por la misma razon que pip-audit.
+      - name: Analisis estatico de seguridad con bandit
+        continue-on-error: true
+        run: |
+          uv run bandit \
+            -r src/ \
+            -f json \
+            -o reports/bandit_report.json \
+            --severity-level medium \
+            || echo "bandit encontro advertencias (ver reporte)"
+          uv run bandit -r src/ -f txt --severity-level medium || true
+
+      - name: Subir reportes de seguridad
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reportes-seguridad
+          path: reports/
+          retention-days: 14
+
+# =============================================================================
+# JOB 4: Tests de integracion con TestContainers
 # =============================================================================
   tests-integracion:
     name: Tests de Integracion
@@ -107,12 +202,7 @@ jobs:
             -m integration
 
 # =============================================================================
-# JOB 3: Tests de sistema end-to-end
-#
-# Levanta el stack completo (PostgreSQL + API) con docker-compose.test.yml.
-# Los tests en tests/system/ usan httpx.Client contra la API real en el puerto 8001.
-# El bucle de espera verifica que la API responda antes de lanzar los tests.
-# docker compose down -v al final limpia volumenes aunque los tests fallen.
+# JOB 5: Tests de sistema E2E (API sobre Docker Compose)
 # =============================================================================
   tests-sistema:
     name: Tests de Sistema E2E
@@ -157,16 +247,176 @@ jobs:
         run: docker compose -f docker-compose.test.yml down -v
 
 # =============================================================================
-# JOB 4: Tests de rendimiento con Locust
+# JOB 6: Tests E2E con Playwright (cross-browser)
 #
-# Solo corre en push a main para no ralentizar el ciclo de PRs.
-# Levanta el mismo stack de test, ejecuta 50 usuarios durante 30 segundos
-# y verifica los SLAs definidos: P95 < 500ms y tasa de error < 1%.
+# Depende de:
+# - build-frontend: para tener el bundle compilado
+# - tests-sistema: para saber que el backend funciona correctamente
+#
+# El frontend-test del docker-compose.test.yml ya tiene el nginx.test.conf que
+# apunta a api-test. Los tests de Playwright corren en el runner de GitHub
+# Actions (FUERA de Docker) apuntando al puerto expuesto 4201.
+# =============================================================================
+  tests-e2e-playwright:
+    name: Tests E2E Playwright (Chromium)
+    runs-on: ubuntu-latest
+    needs: [build-frontend, tests-sistema]
+    # continue-on-error: true porque los tests de browser pueden ser flaky
+    # (timeout de red, diferencias de renderizado). El reporte siempre se
+    # sube como artefacto para investigar fallos.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: "e2e-playwright/package-lock.json"
+
+      - name: Instalar dependencias de Playwright
+        run: cd e2e-playwright && npm ci
+
+      - name: Instalar navegadores de Playwright (solo Chromium en CI)
+        run: cd e2e-playwright && npx playwright install --with-deps chromium
+
+      - name: Levantar stack completo (backend + frontend)
+        run: docker compose -f docker-compose.test.yml up -d --build
+
+      - name: Esperar que la API este lista
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8001/carrito/health-check; then
+              echo "✓ API lista"
+              break
+            fi
+            echo "Intento $i/30 (API)..."
+            sleep 3
+          done
+
+      - name: Esperar que el frontend este listo
+        run: |
+          for i in $(seq 1 40); do
+            if curl -sf http://localhost:4201 > /dev/null 2>&1; then
+              echo "✓ Frontend listo en el intento $i"
+              exit 0
+            fi
+            echo "Intento $i/40 (Frontend)..."
+            sleep 3
+          done
+          echo "El frontend no respondio en 120 segundos"
+          docker compose -f docker-compose.test.yml logs frontend-test
+          exit 1
+
+      - name: Ejecutar tests Playwright (Chromium)
+        env:
+          FRONTEND_URL: http://localhost:4201
+          CI: "true"
+        run: cd e2e-playwright && npx playwright test --project=chromium
+
+      - name: Subir reporte HTML de Playwright
+        uses: actions/upload-artifact@v4
+        # if: always() asegura que el reporte se sube aunque los tests fallen.
+        # Esto es clave para debugging: el HTML report incluye screenshots,
+        # trazas de red y video de cada test que fallo.
+        if: always()
+        with:
+          name: playwright-report
+          path: e2e-playwright/playwright-report/
+          retention-days: 14
+
+      - name: Detener stack
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+# =============================================================================
+# JOB 7: Tests E2E con Cypress (suite comparativa)
+#
+# Corre en PARALELO con Playwright (ambos dependen de build-frontend y tests-sistema).
+# Esto reduce el tiempo total: Playwright y Cypress se ejecutan simultaneamente
+# en runners diferentes.
+# =============================================================================
+  tests-e2e-cypress:
+    name: Tests E2E Cypress
+    runs-on: ubuntu-latest
+    needs: [build-frontend, tests-sistema]
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: "e2e-cypress/package-lock.json"
+
+      - name: Instalar dependencias de Cypress
+        run: cd e2e-cypress && npm ci
+
+      - name: Levantar stack completo (backend + frontend)
+        run: docker compose -f docker-compose.test.yml up -d --build
+
+      - name: Esperar que la API este lista
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8001/carrito/health-check; then
+              echo "✓ API lista"
+              break
+            fi
+            sleep 3
+          done
+
+      - name: Esperar que el frontend este listo
+        run: |
+          for i in $(seq 1 40); do
+            if curl -sf http://localhost:4201 > /dev/null 2>&1; then
+              echo "✓ Frontend listo"
+              exit 0
+            fi
+            sleep 3
+          done
+          docker compose -f docker-compose.test.yml logs frontend-test
+          exit 1
+
+      - name: Ejecutar tests de Cypress
+        env:
+          CYPRESS_BASE_URL: http://localhost:4201
+        run: cd e2e-cypress && npx cypress run --headless
+
+      - name: Subir screenshots de Cypress (solo si falla)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-screenshots
+          path: e2e-cypress/cypress/screenshots/
+          retention-days: 7
+
+      - name: Subir videos de Cypress
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cypress-videos
+          path: e2e-cypress/cypress/videos/
+          retention-days: 7
+
+      - name: Detener stack
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+# =============================================================================
+# JOB 8: Tests de rendimiento con Locust
+#
+# Solo corre en push a main. Ahora tambien verifica que el build del frontend
+# estuvo correcto (depende de build-frontend para garantizar la cadena completa).
 # =============================================================================
   tests-rendimiento:
     name: Tests de Rendimiento Locust
     runs-on: ubuntu-latest
-    needs: tests-sistema
+    needs: [tests-sistema, build-frontend]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
@@ -238,3 +488,66 @@ jobs:
           name: locust-reporte
           path: reports/locust/
           retention-days: 14
+
+# =============================================================================
+# JOB 9: Escaneo de seguridad con OWASP ZAP
+#
+# Solo corre en push a main para no ralentizar el ciclo de PRs.
+# continue-on-error: true porque ZAP genera falsos positivos que deben
+# revisarse manualmente pero no deben bloquear el despliegue.
+# =============================================================================
+  security-zap-scan:
+    name: OWASP ZAP Security Scan
+    runs-on: ubuntu-latest
+    needs: tests-sistema
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Levantar solo el backend (ZAP escanea la API, no el frontend)
+        run: docker compose -f docker-compose.test.yml up -d api-test db-test --build
+
+      - name: Esperar que la API este lista
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8001/carrito/health-check; then
+              echo "✓ API lista para ZAP"
+              exit 0
+            fi
+            sleep 3
+          done
+          docker compose -f docker-compose.test.yml logs api-test && exit 1
+
+      - name: Crear directorio para reportes ZAP
+        run: mkdir -p reports
+
+      - name: Ejecutar OWASP ZAP Baseline Scan
+        # Corremos ZAP directamente desde Docker en el runner de GitHub Actions.
+        # --network host permite que ZAP acceda a localhost:8001.
+        # La -t apunta a la API que esta corriendo en el puerto 8001.
+        run: |
+          docker run --rm \
+            --network host \
+            -v "$(pwd)/reports:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t http://localhost:8001 \
+            -r zap_report.html \
+            -J zap_report.json \
+            -I \
+            -l WARN \
+            || echo "ZAP scan completado (puede haber advertencias — ver reporte)"
+
+      - name: Subir reporte ZAP
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-security-report
+          path: reports/zap_report.*
+          retention-days: 30
+
+      - name: Detener stack
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
