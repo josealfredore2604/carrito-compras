@@ -1,0 +1,328 @@
+/*
+ * Estilos globales de la aplicacion TiendaUV.
+ *
+ * Criterios de accesibilidad WCAG AA aplicados:
+ * - Ratio de contraste minimo 4.5:1 para texto normal.
+ * - El fondo #f0f4f8 (gris muy claro) con texto #1a202c (casi negro) da ratio ~12:1.
+ * - Los botones usan colores con ratio > 4.5:1 contra su texto.
+ * - El foco visible esta preservado con :focus-visible para navegacion por teclado.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+  background-color: #f0f4f8;
+  color: #1a202c; /* Casi negro, contraste muy alto contra fondos claros */
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+h1, h2, h3 {
+  color: #1a202c;
+  font-weight: 600;
+}
+
+/* Contenedor principal de paginas */
+.pagina-contenedor {
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+/* Cabecera de la pagina */
+.cabecera-pagina {
+  background: #2b6cb0; /* Azul medio: contraste > 4.5 contra blanco */
+  color: #ffffff;
+  padding: 1.5rem 2rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.cabecera-pagina h1 {
+  color: #ffffff;
+  font-size: 1.75rem;
+}
+
+.cabecera-pagina p {
+  color: #bee3f8; /* Azul muy claro, contraste ~3:1 solo como decoracion */
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+/* Tarjetas / secciones */
+.tarjeta {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.tarjeta h2 {
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e2e8f0;
+  color: #2d3748;
+}
+
+/* Formularios */
+.form-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.form-grupo label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #4a5568; /* Gris oscuro: contraste ~7:1 contra blanco */
+}
+
+.form-grupo input,
+.form-grupo select {
+  padding: 0.5rem 0.75rem;
+  border: 2px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 1rem;
+  color: #1a202c;
+  background: #ffffff;
+  transition: border-color 0.2s;
+}
+
+.form-grupo input:focus,
+.form-grupo select:focus {
+  outline: 3px solid #4299e1;
+  outline-offset: 1px;
+  border-color: #4299e1;
+}
+
+.form-grupo input.error,
+.form-grupo select.error {
+  border-color: #e53e3e;
+}
+
+.campo-error {
+  font-size: 0.8rem;
+  color: #c53030; /* Rojo oscuro: contraste > 4.5:1 contra blanco */
+  margin-top: 0.2rem;
+}
+
+/* Fila de formulario (inputs en la misma linea en pantallas grandes) */
+.form-fila {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.form-fila .form-grupo {
+  flex: 1;
+  min-width: 140px;
+}
+
+/* Botones */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  text-decoration: none;
+}
+
+.btn:focus-visible {
+  /* Foco visible obligatorio para navegacion por teclado (WCAG 2.4.7) */
+  outline: 3px solid #4299e1;
+  outline-offset: 2px;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primario {
+  background: #2b6cb0;
+  color: #ffffff; /* Blanco sobre azul medio: contraste > 4.5:1 */
+}
+
+.btn-primario:hover:not(:disabled) {
+  background: #2c5282;
+}
+
+.btn-peligro {
+  background: #c53030;
+  color: #ffffff; /* Blanco sobre rojo oscuro: contraste > 4.5:1 */
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+}
+
+.btn-peligro:hover:not(:disabled) {
+  background: #9b2c2c;
+}
+
+.btn-secundario {
+  background: #e2e8f0;
+  color: #2d3748; /* Gris oscuro sobre gris muy claro: contraste > 7:1 */
+}
+
+.btn-secundario:hover:not(:disabled) {
+  background: #cbd5e0;
+}
+
+/* Mensajes de estado */
+.mensaje-error {
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
+  border-left: 4px solid #e53e3e;
+  color: #c53030; /* Rojo oscuro: contraste > 4.5:1 */
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.mensaje-exito {
+  background: #f0fff4;
+  border: 1px solid #c6f6d5;
+  border-left: 4px solid #38a169;
+  color: #276749; /* Verde oscuro: contraste > 4.5:1 */
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.cargando {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #4a5568;
+  padding: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+/* Animacion del spinner de carga */
+@keyframes girar {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #e2e8f0;
+  border-top-color: #4299e1;
+  border-radius: 50%;
+  animation: girar 0.8s linear infinite;
+  display: inline-block;
+}
+
+/* Lista de productos */
+.lista-productos-tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.lista-productos-tabla th {
+  background: #f7fafc;
+  color: #4a5568;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.lista-productos-tabla td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+  color: #2d3748;
+  vertical-align: middle;
+}
+
+.lista-productos-tabla tr:last-child td {
+  border-bottom: none;
+}
+
+.lista-productos-tabla tr:hover td {
+  background: #f7fafc;
+}
+
+.carrito-vacio {
+  text-align: center;
+  padding: 2rem;
+  color: #718096; /* Gris medio - solo para texto informativo no critico */
+  font-style: italic;
+}
+
+/* Resumen de totales */
+.resumen-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+}
+
+.resumen-etiqueta {
+  color: #4a5568;
+  font-size: 0.9rem;
+}
+
+.resumen-valor {
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+  color: #2d3748;
+  text-align: right;
+}
+
+.resumen-total-final {
+  font-size: 1.2rem;
+  color: #2b6cb0;
+  font-weight: 700;
+}
+
+.resumen-separador {
+  grid-column: 1 / -1;
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  margin: 0.25rem 0;
+}
+
+/* Acciones del carrito */
+.acciones-carrito {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+/* Layout de dos columnas en pantallas grandes */
+@media (min-width: 640px) {
+  .grid-dos-columnas {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+}

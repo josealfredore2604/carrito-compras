@@ -39,6 +39,15 @@ reports/
 *.swo
 *~
 
+# ── Node.js ───────────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/.angular/
+e2e-playwright/test-results/
+e2e-playwright/playwright-report/
+e2e-cypress/cypress/videos/
+e2e-cypress/cypress/screenshots/
+
 # ── Sistema operativo ─────────────────────────────────────────────
 .DS_Store
 Thumbs.db

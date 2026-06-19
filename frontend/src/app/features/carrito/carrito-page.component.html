@@ -1,0 +1,92 @@
+<!--
+  Template de la pagina principal del carrito.
+
+  Estructura:
+  - Cabecera con nombre de la tienda y sesion_id (para debugging)
+  - Error global de pagina (si la API no responde)
+  - Indicador de carga global
+  - Formulario para agregar producto
+  - Lista de productos (dumb component)
+  - Dos columnas: formulario de descuento + resumen de totales
+  - Boton de vaciar carrito
+
+  Los data-testid son OBLIGATORIOS: los tests E2E de Playwright, Cypress y
+  Selenium seleccionan elementos exclusivamente por este atributo. Cambiar
+  un data-testid rompe los tests. Los data-testid NO impactan el CSS ni la
+  accesibilidad: son atributos de datos sin significado semántico.
+-->
+<main class="pagina-contenedor" role="main">
+  <!-- Cabecera -->
+  <header class="cabecera-pagina">
+    <h1>🛒 TiendaUV — Carrito de Compras</h1>
+    <p aria-label="Identificador de sesión">
+      Sesión: <code data-testid="sesion-id">{{ sesionId.slice(0, 8) }}…</code>
+    </p>
+  </header>
+
+  <!-- Error global de la pagina (fallo de conexion, etc.) -->
+  @if (errorPagina()) {
+    <div
+      class="mensaje-error"
+      role="alert"
+      aria-live="assertive"
+      data-testid="error-pagina"
+    >
+      ⚠️ {{ errorPagina() }}
+    </div>
+  }
+
+  <!-- Indicador de carga principal -->
+  @if (cargando()) {
+    <div
+      class="cargando tarjeta"
+      role="status"
+      aria-live="polite"
+      data-testid="loading-indicator"
+    >
+      <span class="spinner" aria-hidden="true"></span>
+      Cargando carrito…
+    </div>
+  }
+
+  <!-- Formulario para agregar producto -->
+  <app-agregar-producto-form
+    (productoAgregado)="onAgregarProducto($event)"
+  ></app-agregar-producto-form>
+
+  <!-- Lista de productos del carrito -->
+  <app-lista-productos
+    [productos]="carrito()?.productos ?? []"
+    [eliminando]="eliminando()"
+    (eliminarProducto)="onEliminarProducto($event)"
+  ></app-lista-productos>
+
+  <!-- Descuento y resumen en dos columnas en pantallas grandes -->
+  <div class="grid-dos-columnas">
+    <!-- Formulario de descuento -->
+    <app-aplicar-descuento
+      (descuentoAplicado)="onAplicarDescuento($event)"
+    ></app-aplicar-descuento>
+
+    <!-- Resumen de totales -->
+    <app-resumen-total
+      [total]="carrito()?.total ?? 0"
+      [totalConIva]="carrito()?.total_con_iva ?? 0"
+      [cantidadProductos]="carrito()?.cantidad_productos ?? 0"
+    ></app-resumen-total>
+  </div>
+
+  <!-- Boton de vaciar carrito -->
+  <div class="tarjeta acciones-carrito">
+    <button
+      type="button"
+      class="btn btn-peligro"
+      (click)="onVaciarCarrito()"
+      [disabled]="cargando() || (carrito()?.cantidad_productos ?? 0) === 0"
+      data-testid="btn-vaciar-carrito"
+      aria-label="Vaciar completamente el carrito de compras"
+    >
+      🗑️ Vaciar carrito
+    </button>
+  </div>
+</main>
