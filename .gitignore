@@ -47,6 +47,8 @@ e2e-playwright/test-results/
 e2e-playwright/playwright-report/
 e2e-cypress/cypress/videos/
 e2e-cypress/cypress/screenshots/
+e2e-playwright/node_modules/
+e2e-cypress/node_modules/
 
 # ── Sistema operativo ─────────────────────────────────────────────
 .DS_Store
