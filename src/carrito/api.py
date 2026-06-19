@@ -50,6 +50,7 @@ Ejecutar:
 """
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -57,6 +58,39 @@ from src.database.config import get_db, init_db
 from src.database.repositorio import CarritoRepositorio
 
 app = FastAPI(title="TiendaUV - Carrito API", version="1.0.0")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Middleware de CORS (Cross-Origin Resource Sharing)
+#
+# El navegador bloquea por defecto los requests desde un origen (protocolo +
+# host + puerto) a otro distinto. El frontend Angular en localhost:4200 y la
+# API en localhost:8000 son origenes diferentes; sin CORS el navegador
+# rechazaria los requests en la consola antes de que lleguen al servidor.
+#
+# CORSMiddleware agrega las cabeceras Access-Control-Allow-* en cada respuesta.
+# El navegador lee esas cabeceras y decide si permite o bloquea el request.
+#
+# En produccion (Docker con nginx), nginx actua como reverse proxy y todo el
+# trafico pasa por el mismo origen (puerto 4200 para el frontend, que nginx
+# redirige a la API en /api/). El CORS no es necesario en ese escenario, pero
+# configurarlo aqui permite el desarrollo local sin proxy.
+#
+# allow_origins: lista de origenes permitidos. En desarrollo permitimos el
+# puerto 4200 del dev server de Angular. Para el entorno de tests E2E se
+# agrega tambien el puerto 4201 (docker-compose.test.yml).
+# allow_methods: verbos HTTP que se permiten. Necesitamos GET, POST y DELETE.
+# allow_headers: cabeceras que el cliente puede enviar. Content-Type es
+# obligatorio para los POST con JSON.
+# ─────────────────────────────────────────────────────────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:4200",  # Angular dev server
+        "http://localhost:4201",  # Frontend de pruebas E2E en docker-compose.test.yml
+    ],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept"],
+)
 
 
 @app.on_event("startup")
@@ -196,6 +230,28 @@ def aplicar_descuento(sesion_id: str, descuento: DescuentoInput, db: Session = D
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return {"mensaje": "Descuento aplicado", "total": repo.calcular_total(sesion_id)}
+
+
+@app.delete("/carrito/{sesion_id}/productos/{nombre}")
+def eliminar_producto(sesion_id: str, nombre: str, db: Session = Depends(get_db)):
+    """
+    Elimina un producto individual del carrito por su nombre.
+
+    Por que este endpoint usa el nombre como identificador y no un ID numerico:
+    El modelo de datos actual identifica productos por nombre dentro de un carrito.
+    El repositorio ya implementa eliminar_item(sesion_id, nombre) siguiendo
+    esta convencion. Un cambio a ID numerico requeriria modificar el modelo
+    de datos y todos los endpoints existentes, lo que esta fuera del alcance.
+
+    Si el producto no existe en el carrito, el repositorio lanza ValueError
+    que se convierte en 404 Not Found (el recurso a eliminar no existe).
+    """
+    repo = CarritoRepositorio(db)
+    try:
+        repo.eliminar_item(sesion_id, nombre)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {"mensaje": f"Producto '{nombre}' eliminado del carrito"}
 
 
 @app.delete("/carrito/{sesion_id}")
