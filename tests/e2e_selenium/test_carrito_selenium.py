@@ -238,7 +238,9 @@ class TestCarritoSelenium:
 
         # Seleccionar tipo de descuento y valor
         # In Selenium, para <select> se usa la clase Select
-        select_tipo = Select(self.driver.find_element(By.CSS_SELECTOR, sel("select-tipo-descuento")))
+        select_tipo = Select(
+            self.driver.find_element(By.CSS_SELECTOR, sel("select-tipo-descuento"))
+        )
         select_tipo.select_by_value("porcentaje")
 
         input_valor = self.driver.find_element(By.CSS_SELECTOR, sel("input-valor-descuento"))
@@ -251,9 +253,7 @@ class TestCarritoSelenium:
         # Esperar que el total cambie (espera explicita necesaria en Selenium)
         try:
             self.wait.until(
-                lambda d: d.find_element(
-                    By.CSS_SELECTOR, sel("total-carrito")
-                ).text != total_antes
+                lambda d: d.find_element(By.CSS_SELECTOR, sel("total-carrito")).text != total_antes
             )
         except TimeoutException:
             pytest.fail("El total no cambio despues de aplicar el descuento")

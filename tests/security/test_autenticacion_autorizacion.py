@@ -119,7 +119,7 @@ class TestPathTraversal:
     PAYLOADS_PATH_TRAVERSAL = [
         "../../etc/passwd",
         "../../../etc/shadow",
-        "..%2F..%2Fetc%2Fpasswd",        # URL-encoded
+        "..%2F..%2Fetc%2Fpasswd",  # URL-encoded
         "..%252F..%252Fetc%252Fpasswd",  # Double URL-encoded
         "%2e%2e%2fetc%2fpasswd",
         "....//....//etc/passwd",
@@ -204,9 +204,7 @@ class TestCabecerasSeguridad:
         server = response.headers.get("server", "").lower()
 
         # La version exacta (con numero de build) es la parte peligrosa
-        assert "python/3." not in server, (
-            f"Cabecera Server revela version de Python: '{server}'"
-        )
+        assert "python/3." not in server, f"Cabecera Server revela version de Python: '{server}'"
         assert "uvicorn/0." not in server and "uvicorn/1." not in server, (
             f"Cabecera Server revela version de uvicorn: '{server}'"
         )

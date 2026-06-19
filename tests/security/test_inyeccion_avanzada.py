@@ -54,15 +54,15 @@ class TestSQLInjectionAvanzado:
 
     # Payloads clasicos de SQL injection
     PAYLOADS_SQL = [
-        "' OR '1'='1",                    # Boolean-based blind SQLi
-        "'; DROP TABLE carritos; --",      # Stacked queries (destruccion de datos)
-        "1' UNION SELECT NULL--",          # UNION-based SQLi (extraccion de datos)
-        "' OR 1=1--",                      # Comment-style injection
+        "' OR '1'='1",  # Boolean-based blind SQLi
+        "'; DROP TABLE carritos; --",  # Stacked queries (destruccion de datos)
+        "1' UNION SELECT NULL--",  # UNION-based SQLi (extraccion de datos)
+        "' OR 1=1--",  # Comment-style injection
         "'; INSERT INTO carritos VALUES (99, 'hacked'); --",  # Data insertion
-        "' AND SLEEP(5)--",                # Time-based blind SQLi (deteccion de BD)
-        "1; EXEC xp_cmdshell('whoami')--", # Command execution via SQL Server
-        "' OR '1'='1' /*",                # Comment injection
-        "admin'--",                        # Authentication bypass
+        "' AND SLEEP(5)--",  # Time-based blind SQLi (deteccion de BD)
+        "1; EXEC xp_cmdshell('whoami')--",  # Command execution via SQL Server
+        "' OR '1'='1' /*",  # Comment injection
+        "admin'--",  # Authentication bypass
     ]
 
     @pytest.mark.parametrize("payload", PAYLOADS_SQL)
@@ -99,10 +99,10 @@ class TestSQLInjectionAvanzado:
         )
 
     PAYLOADS_NOSQL = [
-        '{"$gt": ""}',           # MongoDB NoSQL injection
-        '{"$ne": null}',         # Not-equals injection
-        '{"$where": "1==1"}',    # JavaScript injection via $where
-        '{"$regex": ".*"}',      # Regex injection
+        '{"$gt": ""}',  # MongoDB NoSQL injection
+        '{"$ne": null}',  # Not-equals injection
+        '{"$where": "1==1"}',  # JavaScript injection via $where
+        '{"$regex": ".*"}',  # Regex injection
     ]
 
     @pytest.mark.parametrize("payload_nosql", PAYLOADS_NOSQL)
@@ -116,9 +116,7 @@ class TestSQLInjectionAvanzado:
             "/carrito/test-nosql/productos",
             json={"nombre": payload_nosql, "precio": 100, "cantidad": 1},
         )
-        assert response.status_code != 500, (
-            f"Patron NoSQL '{payload_nosql}' causo error 500"
-        )
+        assert response.status_code != 500, f"Patron NoSQL '{payload_nosql}' causo error 500"
 
     PAYLOADS_COMMAND = [
         "; rm -rf /",
@@ -162,9 +160,7 @@ class TestSQLInjectionAvanzado:
             "/carrito/test-ldap/productos",
             json={"nombre": payload_ldap, "precio": 100, "cantidad": 1},
         )
-        assert response.status_code != 500, (
-            f"Patron LDAP '{payload_ldap}' causo error 500"
-        )
+        assert response.status_code != 500, f"Patron LDAP '{payload_ldap}' causo error 500"
 
 
 class TestInyeccionIntegridadDatos:
