@@ -29,6 +29,21 @@ services:
       db:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tiendauv_frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - api
+    environment:
+      # La URL de la API la maneja nginx internamente (proxy_pass http://api:8000/)
+      # No necesita setearse como variable de entorno aqui porque nginx.conf
+      # usa el nombre del servicio 'api' de docker-compose directamente.
+      API_URL: http://api:8000
+
   adminer:
     image: adminer:latest
     ports:

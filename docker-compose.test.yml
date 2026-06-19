@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: test
       POSTGRES_DB: tiendauv_test
     ports:
-      - "5433:5432"
+      - "5434:5432"
     tmpfs:
       - /var/lib/postgresql/data
     healthcheck:
@@ -28,3 +28,31 @@ services:
     depends_on:
       db-test:
         condition: service_healthy
+
+  # Servicio de frontend para los tests E2E.
+  # Se construye con la misma imagen de produccion (nginx + build Angular) pero
+  # sirve en el puerto 4201 para no colisionar con el docker-compose.yml principal.
+  #
+  # nginx.conf hace proxy_pass a http://api:8000/ pero en esta red el servicio
+  # de API se llama 'api-test' en el puerto 8000. Por eso sobreescribimos el
+  # /etc/nginx/conf.d/default.conf con una version que apunta a api-test.
+  #
+  # Alternativa mas simple usada aqui: una variable de entorno NGINX_API_HOST
+  # que el entrypoint de nginx puede leer con envsubst. En vez de eso usamos
+  # un segundo archivo de configuracion que el pipeline copia antes de subir.
+  # Para simplificar el pipeline, el frontend-test apunta directamente al api-test
+  # usando su nombre de red interno Docker.
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tiendauv_frontend_test
+    ports:
+      - "4201:80"
+    depends_on:
+      - api-test
+    # Sobreescribir el nginx.conf para que apunte a api-test en vez de api.
+    # La forma mas limpia de hacerlo sin una imagen especial es con un volumen
+    # que reemplaza el archivo de configuracion.
+    volumes:
+      - ./frontend/nginx.test.conf:/etc/nginx/conf.d/default.conf:ro
