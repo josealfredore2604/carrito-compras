@@ -2167,4 +2167,238 @@ Si algo falla en un test unitario, tienes que:
 
 Por eso la pirámide recomienda tener muchos tests unitarios y pocos de sistema.
 Los tests de sistema verifican que el despliegue funciona, no que el código es correcto.
+
+---
+
+## 29. Arquitectura completa actualizada (con Frontend)
+
+```
+                    ┌──────────────────────────────────────────────────────┐
+                    │  NAVEGADOR (usuario)                                  │
+                    │  Angular 17 — http://localhost:4200                   │
+                    └─────────────────────┬────────────────────────────────┘
+                                          │ HTTP (Angular HttpClient)
+                    ┌─────────────────────▼────────────────────────────────┐
+                    │  NGINX (reverse proxy, Docker)                        │
+                    │  Sirve archivos estáticos de Angular                  │
+                    │  /api/* → http://api:8000/*                           │
+                    └──────────┬──────────────────────────────────────────┘
+                               │ proxy_pass
+          ┌────────────────────▼─────────────────────────────────────────┐
+          │  API FastAPI (src/carrito/api.py)       puerto 8000           │
+          │  CORS middleware, endpoints REST                               │
+          └────────────────────┬────────────────────────────────────────┘
+                               │ SQLAlchemy ORM
+          ┌────────────────────▼────────────────────────────────────────┐
+          │  PostgreSQL (tiendauv)                  puerto 5432          │
+          │  Tabla carritos + tabla items_carrito                        │
+          └────────────────────────────────────────────────────────────┘
+
+En docker-compose.yml (desarrollo):
+  db:8000 → api:8000 → frontend:4200
+
+En docker-compose.test.yml (CI/CD):
+  db-test:5432 → api-test:8001 → frontend-test:4201
+```
+
+---
+
+## 30. Frontend Angular — cómo correrlo
+
+### Sin Docker (desarrollo local)
+
+```bash
+# Requisito: API de FastAPI corriendo en el puerto 8000
+uv run uvicorn src.carrito.api:app --port 8000 --reload
+
+# En otra terminal, instalar y arrancar el frontend
+cd frontend
+npm install
+npm start          # http://localhost:4200
+```
+
+El `proxy.conf.json` redirige `/api/*` al backend en `localhost:8000`, evitando problemas de CORS durante el desarrollo.
+
+### Con Docker Compose
+
+```bash
+# Desde la raíz del proyecto
+docker compose up --build        # Levanta db + api + frontend + adminer
+# → Frontend: http://localhost:4200
+# → API: http://localhost:8000
+# → Adminer (BD): http://localhost:8080
+```
+
+### Variables de entorno del frontend
+
+| Variable       | Descripción                           | Valor por defecto |
+|---------------|---------------------------------------|-------------------|
+| `apiUrl`       | URL base de la API (en el código Angular) | `/api` (relativo, proxiado por nginx o dev server) |
+| `FRONTEND_URL` | URL del frontend para los tests E2E  | `http://localhost:4200` |
+
+---
+
+## 31. Pruebas E2E — las tres herramientas
+
+### ¿Por qué el proyecto tiene Playwright, Cypress Y Selenium?
+
+El objetivo es **educativo**: cada herramienta representa una generación diferente de la evolución del testing de browsers y tiene trade-offs distintos. Tenerlas en el mismo proyecto permite comparar sintaxis y arquitectura lado a lado.
+
+### Tabla comparativa
+
+| Característica         | Playwright (principal) | Cypress (alternativa) | Selenium (legacy) |
+|------------------------|----------------------|-----------------------|-------------------|
+| **Año de creación**    | 2020 (Microsoft)     | 2015                  | 2004              |
+| **Protocolo**          | CDP / WebKit Protocol| Corre dentro del browser | WebDriver W3C  |
+| **Multi-browser**      | Chromium + Firefox + WebKit (gratis) | Chromium + Firefox (Safari en pago) | Todos (con drivers) |
+| **Auto-waiting**       | ✅ Nativo             | ✅ Nativo              | ❌ Manual (WebDriverWait) |
+| **Contextos aislados** | ✅ BrowserContext     | ❌ Una sola sesión     | ✅ (una instancia por test) |
+| **Lenguaje principal** | TypeScript/Python/Java/C# | JavaScript/TypeScript | 9 lenguajes    |
+| **Facilidad de setup** | ⭐⭐⭐⭐⭐            | ⭐⭐⭐⭐               | ⭐⭐              |
+| **Para usar en clase** | Suite principal      | Suite comparativa     | Contexto histórico |
+
+### Comandos para correr cada suite localmente
+
+```bash
+# Prerrequisito: stack completo corriendo
+docker compose up -d --build
+# (esperar que http://localhost:4200 responda)
+
+# Playwright — cross-browser completo
+cd e2e-playwright && npm install
+npx playwright install --with-deps
+npx playwright test                     # todos los browsers
+npx playwright test --project=chromium  # solo Chrome
+npx playwright test --headed             # con ventana visible
+npx playwright show-report              # abrir reporte HTML
+
+# Cypress
+cd e2e-cypress && npm install
+npx cypress open   # modo interactivo (útil para debugging)
+npx cypress run    # modo headless (CI)
+
+# Selenium (Python)
+uv run pytest tests/e2e_selenium/ -v
+```
+
+---
+
+## 32. Seguridad ampliada — mapeo OWASP
+
+### Archivos de tests y su categoría OWASP
+
+| Archivo                                    | OWASP API Top 10                        | Qué verifica |
+|-------------------------------------------|-----------------------------------------|-------------|
+| `test_seguridad_api.py` (existente)       | API8 Injection, API4 Rate Limit         | Payloads básicos, cabeceras, carga |
+| `test_inyeccion_avanzada.py`              | **API8 Injection**                      | SQL, NoSQL, Command, LDAP injection |
+| `test_xss_avanzado.py`                    | **API7 Security Misconfiguration / XSS** | XSS reflejado, almacenado, cabeceras |
+| `test_autenticacion_autorizacion.py`      | **API1 BOLA/IDOR, API8**                | IDOR, path traversal, cabeceras de seguridad |
+| `test_csrf_y_cors.py`                     | **OWASP CSRF / CORS Misconfiguration**  | Configuración CORS, preflight, content-type |
+| `test_rate_limiting_dos.py`               | **API4 Unrestricted Resource Consumption** | 200 requests en ráfaga, payloads gigantes |
+
+### Análisis estático y de dependencias
+
+```bash
+# Auditoria de vulnerabilidades en dependencias Python
+uv run pip-audit
+
+# Análisis estático del código Python (patrones inseguros)
+uv run bandit -r src/ -f txt --severity-level medium
+
+# Vulnerabilidades en dependencias npm del frontend
+cd frontend && npm audit --audit-level=high
+```
+
+### Escaneo dinámico con OWASP ZAP
+
+```bash
+# Prerrequisito: API corriendo en localhost:8000
+docker compose up api -d
+
+# Ejecutar el scan (requiere Docker)
+bash security/zap-baseline.sh
+
+# Los reportes se generan en reports/zap_report.html y reports/zap_report.json
+```
+
+---
+
+## 33. Pirámide de pruebas actualizada del proyecto
+
+Conteo de tests después de agregar el frontend, E2E y los tests de seguridad ampliados:
+
+```
+                         ▲
+                        / \
+                       /   \
+                      / ZAP \
+                     / DAST  \           1 scan (no es un test, es un análisis)
+                    /---------\
+                   / Selenium  \
+                  / E2E (3)    \         3 tests (contexto histórico)
+                 /─────────────\
+                / Cypress E2E   \
+               / (4 tests)      \        4 tests (suite comparativa)
+              /──────────────────\
+             / Playwright E2E     \
+            / (17 tests aprox.)   \      ~17 tests (suite principal: funcional +
+           /────────────────────── \     accesibilidad + visual + aceptación)
+          / Rendimiento / Locust    \
+         / (SLA checks)             \    SLAs automatizados (30s de carga)
+        /───────────────────────────\
+       / Seguridad OWASP             \
+      / (11 + ~60 parametrizados)    \   ~71 tests de seguridad
+     /─────────────────────────────── \
+    / Sistema E2E (httpx contra API)   \
+   / (6 tests)                         \  6 tests contra el stack real en Docker
+  /────────────────────────────────────\
+ / Integración (TestContainers)         \
+/ (16 tests: repositorio + API + BD real)\  16 tests
+/──────────────────────────────────────── \
+        Unitarios + BDD + Funcionales
+        (88 tests, ~5-15 segundos)         88 tests — la base de la pirámide
+```
+
+**Totales aproximados por capa:**
+
+| Capa                        | Tests | Tiempo aproximado | Infraestructura |
+|-----------------------------|-------|-------------------|-----------------|
+| Unitarios + BDD + Funcional + Seguridad básica | 88 | 5-15s | Ninguna |
+| Seguridad OWASP ampliada    | ~71   | 10-20s            | Ninguna (SQLite) |
+| Integración (TestContainers) | 16   | 15-30s            | Docker (auto) |
+| Sistema E2E (httpx)         | 6     | 10-20s            | Docker Compose |
+| E2E Playwright              | ~17   | 60-120s           | Docker Compose + browser |
+| E2E Cypress                 | 4     | 30-60s            | Docker Compose + browser |
+| E2E Selenium                | 3     | 30-60s            | Docker Compose + Chrome |
+| Rendimiento (Locust)        | SLAs  | ~45s              | Docker Compose |
+| OWASP ZAP DAST              | 1 scan | 2-5 min          | Docker Compose + ZAP |
+
+**Total de tests automatizados: ~205 (sin contar el scan de ZAP)**
+
+---
+
+## 34. Tabla de comandos rápidos de referencia
+
+| Tipo de prueba               | Comando                                                                 |
+|------------------------------|-------------------------------------------------------------------------|
+| Tests unitarios              | `uv run pytest tests/test_carrito.py -v`                               |
+| Tests BDD                    | `uv run pytest tests/features/ -v`                                     |
+| Tests funcionales            | `uv run pytest tests/test_funcional.py -v`                             |
+| Tests tabla de decisión      | `uv run pytest tests/test_tabla_decision.py -v`                        |
+| Tests seguridad básica       | `uv run pytest tests/security/test_seguridad_api.py -v`                |
+| Tests seguridad ampliada     | `uv run pytest tests/security/ -v`                                     |
+| Tests integración            | `uv run pytest tests/integration/ -v -m integration`                  |
+| Tests sistema E2E            | `docker compose -f docker-compose.test.yml up -d && uv run pytest tests/system/ -v -m system` |
+| Build frontend               | `cd frontend && npm run build`                                          |
+| Frontend dev (local)         | `cd frontend && npm start`                                              |
+| E2E Playwright (completo)    | `cd e2e-playwright && npx playwright test`                              |
+| E2E Playwright (Chromium)    | `cd e2e-playwright && npx playwright test --project=chromium`           |
+| E2E Cypress (headless)       | `cd e2e-cypress && npx cypress run`                                     |
+| E2E Cypress (interactivo)    | `cd e2e-cypress && npx cypress open`                                    |
+| E2E Selenium                 | `uv run pytest tests/e2e_selenium/ -v`                                  |
+| Rendimiento Locust           | `uv run locust -f tests/performance/locustfile.py --headless -u 50 -r 10 -t 30s --host http://localhost:8001` |
+| Auditoría dependencias       | `uv run pip-audit`                                                       |
+| Análisis estático (bandit)   | `uv run bandit -r src/ --severity-level medium`                         |
+| ZAP Scan                     | `bash security/zap-baseline.sh`                                          |
+| Suite completa (CI local)    | `docker compose up -d && uv run pytest tests/ --ignore=tests/e2e_selenium -v` |
 Los tests unitarios verifican que el código es correcto, sin depender del despliegue.
