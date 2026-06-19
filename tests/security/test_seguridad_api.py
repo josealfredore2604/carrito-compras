@@ -261,6 +261,101 @@ class TestCabeceras:
         )
 
 
+class TestEndpointsNuevos:
+    """
+    Cobertura de los endpoints agregados en esta iteracion del proyecto.
+
+    health-check, vaciar carrito, y eliminar producto individual son endpoints
+    que tambien tienen implicaciones de seguridad:
+    - health-check: no debe revelar informacion interna del servidor.
+    - vaciar: operacion destructiva que debe responder correctamente.
+    - eliminar producto: debe retornar 404 si el recurso no existe, no 500.
+      Un 500 aqui revelaria detalles internos del servidor al atacante.
+    """
+
+    def test_health_check_retorna_ok(self):
+        """
+        El endpoint de salud debe retornar 200 con {"status": "ok"}.
+        No debe revelar versiones, rutas internas ni detalles de infraestructura.
+        """
+        response = client.get("/carrito/health-check")
+        assert response.status_code == 200
+        data = response.json()
+        assert data == {"status": "ok"}, f"Respuesta inesperada del health-check: {data}"
+
+    def test_vaciar_carrito_retorna_200(self):
+        """
+        DELETE /carrito/{sesion_id} debe vaciar el carrito y retornar 200.
+        Verificar que una operacion destructiva no genera 500.
+        """
+        sesion = "test-vaciar-api"
+        client.post(
+            f"/carrito/{sesion}/productos",
+            json={"nombre": "Laptop", "precio": 100_000, "cantidad": 1},
+        )
+        response = client.delete(f"/carrito/{sesion}")
+        assert response.status_code == 200
+        assert response.status_code != 500
+
+    def test_eliminar_producto_individual_retorna_200(self):
+        """
+        DELETE /carrito/{sesion_id}/productos/{nombre} debe eliminar el producto
+        y retornar 200. Es el endpoint nuevo agregado para el flujo del frontend.
+        """
+        sesion = "test-delete-producto"
+        client.post(
+            f"/carrito/{sesion}/productos",
+            json={"nombre": "Laptop", "precio": 100_000, "cantidad": 1},
+        )
+        response = client.delete(f"/carrito/{sesion}/productos/Laptop")
+        assert response.status_code == 200
+        assert response.status_code != 500
+
+    def test_eliminar_producto_inexistente_retorna_404_no_500(self):
+        """
+        Intentar eliminar un producto que no existe debe retornar 404, no 500.
+
+        OWASP API1: un servidor que retorna 500 ante un recurso inexistente puede
+        revelar detalles del error interno (traza de pila, query SQL) en el cuerpo
+        de la respuesta. El 404 correcto indica que el sistema maneja el error
+        de forma controlada.
+        """
+        response = client.delete("/carrito/sesion-vacia/productos/ProductoQueNoExiste")
+        assert response.status_code == 404, (
+            f"Recurso inexistente debe ser 404, fue: {response.status_code}"
+        )
+        assert response.status_code != 500
+
+    def test_precio_invalido_retorna_422_no_500(self):
+        """
+        Un precio negativo debe ser rechazado con 422, no con 500.
+        La validacion de negocio debe capturarse y convertirse en respuesta HTTP.
+        """
+        response = client.post(
+            "/carrito/test-precio-negativo/productos",
+            json={"nombre": "Laptop", "precio": -1, "cantidad": 1},
+        )
+        assert response.status_code == 422
+        assert response.status_code != 500
+
+    def test_descuento_tipo_invalido_retorna_422_no_500(self):
+        """
+        Un tipo de descuento invalido debe retornar 422, no 500.
+        Verifica que el bloque except ValueError del endpoint funciona correctamente.
+        """
+        sesion = "test-descuento-invalido"
+        client.post(
+            f"/carrito/{sesion}/productos",
+            json={"nombre": "Laptop", "precio": 100_000, "cantidad": 1},
+        )
+        response = client.post(
+            f"/carrito/{sesion}/descuento",
+            json={"tipo": "tipo_invalido", "valor": 10},
+        )
+        assert response.status_code == 422
+        assert response.status_code != 500
+
+
 class TestRateLimit:
     """
     OWASP API4: Unrestricted Resource Consumption
