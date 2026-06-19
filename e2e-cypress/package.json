@@ -1,0 +1,12 @@
+{
+  "name": "e2e-cypress-tiendauv",
+  "version": "1.0.0",
+  "description": "Suite E2E comparativa con Cypress para el carrito de TiendaUV",
+  "scripts": {
+    "cy:run": "cypress run",
+    "cy:open": "cypress open"
+  },
+  "devDependencies": {
+    "cypress": "^13.8.0"
+  }
+}
