@@ -38,8 +38,11 @@ export default defineConfig({
   e2e: {
     // baseUrl configurable por variable de entorno CYPRESS_BASE_URL.
     // En CI, se setea a http://localhost:4201 (docker-compose.test.yml).
-    // Localmente, se puede sobreescribir con: CYPRESS_BASE_URL=http://localhost:4200 npm run cy:run
+    // Localmente: CYPRESS_BASE_URL=http://localhost:4201 npx cypress run
     baseUrl: process.env['CYPRESS_BASE_URL'] ?? 'http://localhost:4200',
+    // En Cypress 15, CYPRESS_* env vars exponen valores al browser via Cypress.env().
+    // No usamos Cypress.env() en los tests, asi que se deshabilita para suprimir el warning.
+    allowCypressEnv: false,
     specPattern: 'cypress/e2e/**/*.cy.ts',
     supportFile: 'cypress/support/e2e.ts',
     // Carpeta donde Cypress guarda los screenshots cuando falla un test
