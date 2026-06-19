@@ -88,14 +88,13 @@ test.describe('Como cliente quiero gestionar mi carrito de compras', () => {
       await page.getByTestId('select-tipo-descuento').selectOption('porcentaje');
       await page.getByTestId('input-valor-descuento').fill('20');
       await page.getByTestId('btn-aplicar-descuento').click();
-      await page.waitForLoadState('networkidle');
 
-      // ENTONCES: el total se reduce (no es igual al anterior)
-      const totalDespues = await page.getByTestId('total-carrito').innerText();
-      expect(totalDespues).not.toBe(totalAntes);
-
-      // Y el mensaje de exito del descuento es visible
+      // ENTONCES: el mensaje de exito confirma que la API proceso el descuento.
+      // Usamos expect() en vez de waitForLoadState porque Angular puede actualizar
+      // el DOM en el siguiente tick despues de que networkidle resuelve.
       await expect(page.getByTestId('exito-descuento')).toBeVisible();
+      // Playwright reintenta esta assertion hasta que el total cambie
+      await expect(page.getByTestId('total-carrito')).not.toHaveText(totalAntes);
     }
   );
 
@@ -118,8 +117,7 @@ test.describe('Como cliente quiero gestionar mi carrito de compras', () => {
       // Y el otro producto sigue en la lista
       await expect(page.getByTestId('item-producto-Libro Python')).toBeVisible();
 
-      // Y la cantidad de productos es 1
-      await page.waitForLoadState('networkidle');
+      // Y la cantidad de productos es 1 (toContainText ya reintenta automaticamente)
       await expect(page.getByTestId('cantidad-productos')).toContainText('1');
     }
   );
@@ -134,18 +132,15 @@ test.describe('Como cliente quiero gestionar mi carrito de compras', () => {
 
       // CUANDO: vacio el carrito
       await page.getByTestId('btn-vaciar-carrito').click();
-      await page.waitForLoadState('networkidle');
 
-      // ENTONCES: la lista muestra el mensaje de carrito vacio
+      // ENTONCES: la lista muestra el mensaje de carrito vacio (reintenta hasta que sea visible)
       await expect(page.getByTestId('carrito-vacio')).toBeVisible();
 
       // Y el total es 0
-      const textoTotal = await page.getByTestId('total-carrito').innerText();
-      expect(textoTotal).toContain('0');
+      await expect(page.getByTestId('total-carrito')).toContainText('0');
 
       // Y el total con IVA es 0
-      const textoTotalIva = await page.getByTestId('total-con-iva').innerText();
-      expect(textoTotalIva).toContain('0');
+      await expect(page.getByTestId('total-con-iva')).toContainText('0');
     }
   );
 
@@ -155,15 +150,12 @@ test.describe('Como cliente quiero gestionar mi carrito de compras', () => {
     async ({ page }) => {
       // DADO: agrego un producto con precio exacto
       await agregarProductoAlCarrito(page, 'Silla', 1_000_000, 1);
-      await page.waitForLoadState('networkidle');
 
-      // ENTONCES: el total sin IVA es 1.000.000
-      const totalSinIva = await page.getByTestId('total-carrito').innerText();
-      expect(totalSinIva).toContain('1.000.000');
+      // Angular usa locale en-US por defecto: el CurrencyPipe formatea con comas (1,000,000)
+      await expect(page.getByTestId('total-carrito')).toContainText('1,000,000');
 
       // Y el total con IVA es 1.190.000 (1.000.000 * 1.19)
-      const totalConIva = await page.getByTestId('total-con-iva').innerText();
-      expect(totalConIva).toContain('1.190.000');
+      await expect(page.getByTestId('total-con-iva')).toContainText('1,190,000');
     }
   );
 
@@ -173,17 +165,16 @@ test.describe('Como cliente quiero gestionar mi carrito de compras', () => {
     async ({ page }) => {
       // DADO: producto de precio 200.000
       await agregarProductoAlCarrito(page, 'Audífonos', 200_000, 1);
-      await page.waitForLoadState('networkidle');
+      // agregarProductoAlCarrito ya espera que el item sea visible antes de continuar
 
       // CUANDO: aplico descuento fijo de 50.000
       await page.getByTestId('select-tipo-descuento').selectOption('fijo');
       await page.getByTestId('input-valor-descuento').fill('50000');
       await page.getByTestId('btn-aplicar-descuento').click();
-      await page.waitForLoadState('networkidle');
+      await expect(page.getByTestId('exito-descuento')).toBeVisible();
 
-      // ENTONCES: el total es 150.000 (200.000 - 50.000)
-      const totalDespues = await page.getByTestId('total-carrito').innerText();
-      expect(totalDespues).toContain('150.000');
+      // ENTONCES: el total es 150.000 (200.000 - 50.000); en-US locale: comas como separador
+      await expect(page.getByTestId('total-carrito')).toContainText('150,000');
     }
   );
 });

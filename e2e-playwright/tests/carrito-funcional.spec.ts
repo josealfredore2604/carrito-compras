@@ -114,12 +114,11 @@ test.describe('Carrito funcional — camino feliz', () => {
     await page.getByTestId('input-valor-descuento').fill('10');
     await page.getByTestId('btn-aplicar-descuento').click();
 
-    // Esperar que el total se actualice (cambia despues de recargar del backend)
-    await page.waitForLoadState('networkidle');
-
-    const totalDespues = await page.getByTestId('total-carrito').innerText();
-    // El total con descuento debe ser diferente al original
-    expect(totalDespues).not.toBe(totalAntes);
+    // Esperar el mensaje de exito: confirma que la API respondio y el componente lo proceso.
+    // networkidle no es suficiente porque Angular actualiza el DOM en el siguiente tick
+    // despues de la respuesta HTTP; expect() reintenta hasta que el DOM cambie.
+    await expect(page.getByTestId('exito-descuento')).toBeVisible();
+    await expect(page.getByTestId('total-carrito')).not.toHaveText(totalAntes);
 
     // El total con IVA debe estar presente y ser mayor que el total sin IVA
     await expect(page.getByTestId('total-con-iva')).toBeVisible();
