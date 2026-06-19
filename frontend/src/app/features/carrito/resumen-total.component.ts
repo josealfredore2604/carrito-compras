@@ -12,14 +12,13 @@ import { CurrencyPipe } from '@angular/common';
   template: `
     <div class="tarjeta">
       <h2>Resumen</h2>
+      <!-- <hr> no es hijo valido de <dl>; la separacion visual se hace con CSS -->
       <dl class="resumen-grid">
         <dt class="resumen-etiqueta">Productos en el carrito</dt>
         <dd class="resumen-valor" data-testid="cantidad-productos">{{ cantidadProductos }}</dd>
 
-        <hr class="resumen-separador" role="presentation" />
-
-        <dt class="resumen-etiqueta">Total sin IVA</dt>
-        <dd class="resumen-valor" data-testid="total-carrito">
+        <dt class="resumen-etiqueta resumen-separador-top">Total sin IVA</dt>
+        <dd class="resumen-valor resumen-separador-top" data-testid="total-carrito">
           {{ total | currency:'COP':'symbol-narrow':'1.0-0' }}
         </dd>
 
@@ -28,12 +27,10 @@ import { CurrencyPipe } from '@angular/common';
           {{ totalConIva - total | currency:'COP':'symbol-narrow':'1.0-0' }}
         </dd>
 
-        <hr class="resumen-separador" role="presentation" />
-
-        <dt class="resumen-etiqueta resumen-total-final">
+        <dt class="resumen-etiqueta resumen-total-final resumen-separador-top">
           <strong>Total con IVA</strong>
         </dt>
-        <dd class="resumen-valor resumen-total-final" data-testid="total-con-iva">
+        <dd class="resumen-valor resumen-total-final resumen-separador-top" data-testid="total-con-iva">
           {{ totalConIva | currency:'COP':'symbol-narrow':'1.0-0' }}
         </dd>
       </dl>
