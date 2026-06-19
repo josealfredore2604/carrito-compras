@@ -1,0 +1,16 @@
+{
+  "name": "e2e-playwright-tiendauv",
+  "version": "1.0.0",
+  "description": "Suite E2E principal con Playwright para el carrito de TiendaUV",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:chromium": "playwright test --project=chromium",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "@axe-core/playwright": "^4.9.0"
+  }
+}
